@@ -1,0 +1,1430 @@
+<!--
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Live Avatar Client</title>
+  <meta name="description" content="A glassmorphic real-time Gemini Live Avatar streaming client built for ADK.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --primary: #00b0ff;
+      /* Electric blue accent */
+      --primary-hover: #40c4ff;
+      --bg: #030712;
+      --card-bg: rgba(10, 15, 30, 0.45);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --gold: #FFB800;
+      /* Premium gold accent */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      position: relative;
+    }
+
+    /* Video wrapper occupies the full screen, centered */
+    .avatar-wrapper {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .avatar-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .avatar-placeholder {
+      position: absolute;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      transition: opacity 0.5s ease;
+    }
+
+    .avatar-placeholder.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .avatar-placeholder p {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-top: 16px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Left Sidebar Overlay Panel */
+    .overlay-panel {
+      position: absolute;
+      top: 40px;
+      left: 40px;
+      bottom: 120px;
+      /* Leave space for bottom bar and margin */
+      width: 440px;
+      z-index: 10;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-radius: 28px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+
+    .citi-logo {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #004B87;
+      /* Citi Blue */
+      font-family: Arial, sans-serif;
+      letter-spacing: -1.5px;
+      text-transform: lowercase;
+      background: linear-gradient(135deg, #00b0ff 0%, #004B87 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-sub {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text);
+      opacity: 0.95;
+    }
+
+    .status-badge {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ea4335;
+      box-shadow: 0 0 8px #ea4335;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .status-dot.connected {
+      background: #34c759;
+      box-shadow: 0 0 10px #34c759;
+    }
+
+    .welcome-text {
+      margin-bottom: 20px;
+    }
+
+    .welcome-text h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .welcome-text p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Chat Log */
+    .chat-box {
+      flex-grow: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-right: 8px;
+      margin-bottom: 8px;
+      mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+    }
+
+    /* Scrollbar */
+    .chat-box::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .chat-box::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .chat-box::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    .chat-message {
+      padding: 12px 16px;
+      border-radius: 18px;
+      max-width: 88%;
+      line-height: 1.45;
+      font-size: 0.95rem;
+      animation: messageSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes messageSlide {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .chat-message.user {
+      background: linear-gradient(135deg, #00b0ff 0%, #004B87 100%);
+      color: #fff;
+      align-self: flex-end;
+      font-weight: 500;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 176, 255, 0.2);
+    }
+
+    .chat-message.model {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      align-self: flex-start;
+      border-top-left-radius: 4px;
+    }
+
+    /* Floating Bottom Input Bar */
+    .input-bar-container {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 80px);
+      max-width: 680px;
+      z-index: 10;
+      background: rgba(15, 20, 35, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border-radius: 24px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      transition: all 0.3s ease;
+    }
+
+    .input-bar-container:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 20px 50px rgba(0, 176, 255, 0.15);
+    }
+
+    .text-input {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 1.05rem;
+      outline: none;
+      padding: 8px 0;
+    }
+
+    .text-input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: #030712;
+      border: none;
+      border-radius: 16px;
+      padding: 10px 24px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 176, 255, 0.3);
+    }
+
+    .btn:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-mic {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-mic:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-mic.recording {
+      background: #ea4335;
+      border-color: #ea4335;
+      color: #fff;
+      box-shadow: 0 0 15px rgba(234, 67, 53, 0.4);
+    }
+
+    .btn-mic svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .wave {
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 176, 255, 0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(0, 176, 255, 0.4);
+      }
+
+      70% {
+        box-shadow: 0 0 0 16px rgba(0, 176, 255, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(0, 176, 255, 0);
+      }
+    }
+
+    /* Widget Overlay Container */
+    .widget-overlay-container {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 80px);
+      max-width: 460px;
+      z-index: 9;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      pointer-events: none;
+      /* Let clicks pass through if empty */
+    }
+
+    .widget-card {
+      pointer-events: auto;
+      /* Clickable card contents */
+      background: rgba(15, 22, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-radius: 22px;
+      padding: 22px;
+      color: var(--text);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      animation: widgetSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    @keyframes widgetSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .widget-close-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.2rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+
+    .widget-close-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .widget-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 14px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Account balances list styling */
+    .widget-account-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .widget-account-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+
+    .widget-account-name {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .widget-account-num {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .widget-account-balance {
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .widget-total-row {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.15);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    /* Info Grid for Profile & Advisor */
+    .widget-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      font-size: 0.85rem;
+    }
+
+    .widget-info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .widget-info-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .widget-info-value {
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .widget-info-value-full {
+      grid-column: span 2;
+    }
+
+    /* Slots List */
+    .widget-slots-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .widget-slot-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      color: #fff;
+    }
+
+    .widget-slot-item:hover {
+      background: rgba(0, 176, 255, 0.12);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="avatar-wrapper">
+    <div class="avatar-placeholder" id="placeholder">
+      <div class="wave">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <line x1="12" x2="12" y1="19" y2="22" />
+        </svg>
+      </div>
+      <p>Establishing secure connection...</p>
+    </div>
+    <video class="avatar-video" id="avatarVideo" autoplay playsinline></video>
+    <div class="widget-overlay-container" id="widgetContainer"></div>
+  </div>
+
+  <!-- Left Sidebar Panel Overlay -->
+  <div class="overlay-panel" id="overlayPanel">
+    <div class="panel-header">
+      <div class="brand-row">
+        <span class="citi-logo">citi</span>
+        <span class="brand-sub">Wealth Live</span>
+      </div>
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Disconnected</span>
+      </div>
+    </div>
+
+    <div class="welcome-text">
+      <h2>Conversational Assistant</h2>
+      <p>Speak naturally or type below to inquire about your portfolio, market insights, and scheduling.</p>
+    </div>
+
+    <div class="chat-box" id="chatBox">
+      <!-- Chat logs and real-time transcriptions appear here -->
+    </div>
+  </div>
+
+  <!-- Bottom Floating Input Bar -->
+  <div class="input-bar-container">
+    <button class="btn-mic" id="micBtn" title="Speak to Sky">
+      <svg viewBox="0 0 24 24">
+        <path fill="currentColor"
+          d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
+      </svg>
+    </button>
+    <input type="text" class="text-input" id="textInput" placeholder="Ask Sky anything..." autocomplete="off">
+    <button class="btn" id="sendBtn">
+      <span>Send</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        style="margin-left: 6px;">
+        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+      </svg>
+    </button>
+  </div>
+
+  <script>
+    const appName = 'live_avatar_agent';
+
+    // Extract client name dynamically from URL search params
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userId') || 'web_avatar_user';
+    const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
+
+    const httpUrl = `http://localhost:8000/apps/${appName}/users/${userId}/sessions`;
+    const websocketUrl = `ws://localhost:8000/run_live?user_id=${userId}&session_id=${sessionId}&app_name=${appName}&save_live_blob=true`;
+
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const placeholder = document.getElementById('placeholder');
+    const chatBox = document.getElementById('chatBox');
+    const textInput = document.getElementById('textInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const micBtn = document.getElementById('micBtn');
+    const videoElement = document.getElementById('avatarVideo');
+
+    let ws = null;
+    let mediaSource = null;
+    let sourceBuffer = null;
+    let queue = [];
+    let isUpdating = false;
+    let hasTranscription = false;
+    let isPrebuffering = true;
+    const MIN_PREBUFFER_CHUNKS = 2; // Low-latency jitter buffer threshold
+
+    async function connect() {
+      statusText.textContent = 'Creating Session...';
+
+      try {
+        const response = await fetch(httpUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: sessionId
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to create session: ${response.statusText}`);
+        }
+      } catch (err) {
+        console.error('Session creation failed:', err);
+        addMessage('System', 'Failed to create session on the server.', 'model');
+        statusText.textContent = 'Connection Error';
+        return;
+      }
+
+      statusText.textContent = 'Connecting...';
+      ws = new WebSocket(websocketUrl);
+      ws.binaryType = 'arraybuffer';
+
+      // Setup MediaSource for the video element
+      mediaSource = new MediaSource();
+      videoElement.src = URL.createObjectURL(mediaSource);
+
+      videoElement.addEventListener('timeupdate', () => {
+        if (videoElement.buffered && videoElement.buffered.length > 0) {
+          const bufferedEnd = videoElement.buffered.end(videoElement.buffered.length - 1);
+          const drift = bufferedEnd - videoElement.currentTime;
+          if (drift > 0.6) {
+            console.log('Low latency catch-up: seeking closer to live edge (drift:', drift, 's)');
+            videoElement.currentTime = bufferedEnd - 0.15;
+          }
+        }
+      });
+
+      mediaSource.addEventListener('sourceopen', () => {
+        mediaSource.duration = Infinity;
+        sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+        sourceBuffer.addEventListener('updateend', () => {
+          isUpdating = false;
+          if (queue.length > 0) {
+            appendNextChunk();
+          }
+        });
+      });
+
+      ws.onopen = () => {
+        statusDot.classList.add('connected');
+        statusText.textContent = 'Connected';
+        placeholder.classList.add('hidden');
+        addMessage('System', 'Connected securely to Sky.', 'model');
+      };
+
+      ws.onclose = () => {
+        statusDot.classList.remove('connected');
+        statusText.textContent = 'Disconnected';
+        placeholder.classList.remove('hidden');
+        addMessage('System', 'Session terminated. Reconnecting...', 'model');
+        // Auto-reconnect after 3 seconds
+        setTimeout(connect, 3000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const response = JSON.parse(event.data);
+          console.log('WS message:', response);
+
+          // 1. Handle user voice input transcription (inputTranscription)
+          if (response.inputTranscription && response.inputTranscription.text) {
+            if (!currentUserVoiceMessageDiv) {
+              currentUserVoiceMessageDiv = document.createElement('div');
+              currentUserVoiceMessageDiv.classList.add('chat-message', 'user');
+              currentUserVoiceMessageDiv.textContent = 'Voice: ';
+              chatBox.appendChild(currentUserVoiceMessageDiv);
+              currentModelMessageDiv = null;
+              hasTranscription = false;
+            }
+            if (response.inputTranscription.finished) {
+              currentUserVoiceMessageDiv.textContent = 'Voice: ' + response.inputTranscription.text;
+              currentUserVoiceMessageDiv = null; // Turn complete
+            } else {
+              currentUserVoiceMessageDiv.textContent += response.inputTranscription.text;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+          }
+
+          // 2. Handle model transcript (outputTranscription)
+          if (response.outputTranscription && response.outputTranscription.text) {
+            hasTranscription = true;
+            if (!currentModelMessageDiv) {
+              currentModelMessageDiv = document.createElement('div');
+              currentModelMessageDiv.classList.add('chat-message', 'model');
+              currentModelMessageDiv.textContent = '';
+              chatBox.appendChild(currentModelMessageDiv);
+            }
+            if (response.outputTranscription.finished) {
+              currentModelMessageDiv.textContent = response.outputTranscription.text;
+            } else {
+              currentModelMessageDiv.textContent += response.outputTranscription.text;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+          }
+
+          // 3. Handle text content (transcripts or messages)
+          if (response.content && response.content.parts) {
+            for (const part of response.content.parts) {
+              if (part.text) {
+                const cleanPart = part.text.trim().replace(/\.+$/, '');
+                const cleanDiv = (currentModelMessageDiv ? currentModelMessageDiv.textContent : '').trim().replace(/\.+$/, '');
+                if (cleanPart === cleanDiv) {
+                  // Prevent duplication of identical speech transcript
+                } else {
+                  if (currentModelMessageDiv) {
+                    currentModelMessageDiv.textContent = part.text;
+                  } else {
+                    addMessage('Sky', part.text, 'model');
+                  }
+                }
+              }
+              // 4. Handle tool response to render visual widget overlays
+              if (part.functionResponse) {
+                renderWidget(part.functionResponse.name, part.functionResponse.response);
+              }
+              // 5. Handle video inlineData chunks
+              if (part.inlineData && part.inlineData.mimeType) {
+                console.log('Received inlineData with mimeType:', part.inlineData.mimeType);
+                if (part.inlineData.mimeType.startsWith('video/')) {
+                  const base64Data = part.inlineData.data;
+                  const binaryData = base64ToUint8Array(base64Data);
+                  queue.push(binaryData);
+                  if (!isUpdating) {
+                    appendNextChunk();
+                  }
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err);
+        }
+      };
+    }
+
+    let currentModelMessageDiv = null;
+    let currentUserVoiceMessageDiv = null;
+
+    const widgetContainer = document.getElementById('widgetContainer');
+
+    function renderWidget(name, data) {
+      if (!data) return;
+      console.log('Rendering widget:', name, data);
+
+      // Clear previous widget first
+      widgetContainer.innerHTML = '';
+
+      const card = document.createElement('div');
+      card.classList.add('widget-card');
+
+      // Close button
+      const closeBtn = document.createElement('button');
+      closeBtn.classList.add('widget-close-btn');
+      closeBtn.innerHTML = '&times;';
+      closeBtn.onclick = () => card.remove();
+      card.appendChild(closeBtn);
+
+      let hasContent = false;
+
+      if (name === 'get_client_portfolio_summary' || name === 'get_client_portfolio_networth' || data.widget_type === 'portfolio_overview' || data.widget_type === 'networth-chart') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+          Portfolio Summary
+        `;
+        card.appendChild(title);
+
+        const list = document.createElement('div');
+        list.classList.add('widget-account-list');
+
+        let accounts = data.accounts || [];
+        if (accounts.length === 0 && (data.total_assets || data.net_worth)) {
+          // If net worth was requested
+          accounts = [
+            { productName: 'Total Assets', account_type: 'assets', balance: data.total_assets || data.net_worth, account_number: '' }
+          ];
+        }
+
+        let total = 0;
+        accounts.forEach(acc => {
+          const item = document.createElement('div');
+          item.classList.add('widget-account-item');
+
+          const labelSpan = document.createElement('span');
+          labelSpan.classList.add('widget-account-name');
+          const typeFormatted = acc.account_type ? acc.account_type.toUpperCase() : 'ACCOUNT';
+          const accNumText = acc.account_number ? ` (*${acc.account_number})` : '';
+          labelSpan.innerHTML = `${acc.productName || typeFormatted}<span class="widget-account-num">${accNumText}</span>`;
+
+          const valSpan = document.createElement('span');
+          valSpan.classList.add('widget-account-balance');
+          valSpan.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(acc.balance);
+
+          item.appendChild(labelSpan);
+          item.appendChild(valSpan);
+          list.appendChild(item);
+
+          total += acc.balance;
+        });
+
+        card.appendChild(list);
+
+        const totalRow = document.createElement('div');
+        totalRow.classList.add('widget-total-row');
+        totalRow.innerHTML = `
+          <span>Total Balance</span>
+          <span>${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total)}</span>
+        `;
+        card.appendChild(totalRow);
+        hasContent = true;
+      }
+
+      else if (name === 'get_client_profile_details' || data.widget_type === 'client_profile') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Client Profile
+        `;
+        card.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.classList.add('widget-info-grid');
+        grid.innerHTML = `
+          <div class="widget-info-item">
+            <div class="widget-info-label">Client Name</div>
+            <div class="widget-info-value">${data.client_name || 'John Smith'}</div>
+          </div>
+          <div class="widget-info-item">
+            <div class="widget-info-label">Phone</div>
+            <div class="widget-info-value">${data.phone || ''}</div>
+          </div>
+          <div class="widget-info-item widget-info-value-full">
+            <div class="widget-info-label">Email Address</div>
+            <div class="widget-info-value">${data.email || ''}</div>
+          </div>
+          <div class="widget-info-item widget-info-value-full">
+            <div class="widget-info-label">Primary Address</div>
+            <div class="widget-info-value">${data.address || ''}</div>
+          </div>
+        `;
+        card.appendChild(grid);
+        hasContent = true;
+      }
+
+      else if (name === 'get_advisor_relationship_details' || data.widget_type === 'advisor-details') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Your Advisor Team
+        `;
+        card.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.classList.add('widget-info-grid');
+
+        const wa = data.wealth_advisor || {};
+        const rm = data.relationship_manager || {};
+
+        grid.innerHTML = `
+          <div class="widget-info-item widget-info-value-full" style="border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:8px;">
+            <div class="widget-info-label">Wealth Advisor</div>
+            <div class="widget-info-value" style="color:var(--primary);">${wa.name || 'Alexandra Vance'}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+              ${wa.email || 'alexandra.vance@citi.com'} &bull; ${wa.phone || '(212) 555-0155'}
+            </div>
+          </div>
+          <div class="widget-info-item widget-info-value-full" style="padding-top:4px;">
+            <div class="widget-info-label">Relationship Manager</div>
+            <div class="widget-info-value" style="color:var(--primary);">${rm.name || 'Marcus Sterling'}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+              ${rm.email || 'marcus.sterling@citi.com'} &bull; ${rm.phone || '(212) 555-0177'}
+            </div>
+          </div>
+        `;
+        card.appendChild(grid);
+        hasContent = true;
+      }
+
+      else if (name === 'get_schedule_meeting_details' || data.widget_type === 'schedule-appointment') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Schedule Advisor Meeting
+        `;
+        card.appendChild(title);
+
+        const list = document.createElement('div');
+        list.classList.add('widget-slots-list');
+
+        const slots = data.available_slots || [
+          "Monday, 10:00 AM",
+          "Tuesday, 2:00 PM",
+          "Wednesday, 11:00 AM"
+        ];
+
+        slots.forEach(slot => {
+          const item = document.createElement('div');
+          item.classList.add('widget-slot-item');
+          item.textContent = slot;
+          item.onclick = () => {
+            textInput.value = `I would like to book the slot: ${slot}`;
+            sendMessage();
+            card.remove();
+          };
+          list.appendChild(item);
+        });
+
+        card.appendChild(list);
+        hasContent = true;
+      }
+
+      else if (name === 'get_upcoming_appointments' || data.widget_type === 'view-appointments') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Upcoming Appointments
+        `;
+        card.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.classList.add('widget-info-grid');
+
+        const appointments = data.appointments || [];
+        if (appointments.length > 0) {
+          const appt = appointments[0];
+          grid.innerHTML = `
+            <div class="widget-info-item">
+              <div class="widget-info-label">Advisor</div>
+              <div class="widget-info-value">${appt.advisor_name}</div>
+            </div>
+            <div class="widget-info-item">
+              <div class="widget-info-label">Topic</div>
+              <div class="widget-info-value">${appt.topic}</div>
+            </div>
+            <div class="widget-info-item widget-info-value-full">
+              <div class="widget-info-label">Date & Time</div>
+              <div class="widget-info-value" style="color:var(--gold);">${appt.date} at ${appt.time}</div>
+            </div>
+          `;
+        } else {
+          grid.innerHTML = `<div class="widget-info-item widget-info-value-full">No upcoming appointments found.</div>`;
+        }
+        card.appendChild(grid);
+        hasContent = true;
+      }
+
+      else if (name === 'get_certificate_of_deposit_dtls' || data.widget_type === 'cd-maturity') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Certificate of Deposit (CD)
+        `;
+        card.appendChild(title);
+
+        const cds = data.cds || [];
+        const grid = document.createElement('div');
+        grid.classList.add('widget-info-grid');
+
+        if (cds.length > 0) {
+          const cd = cds[0];
+          grid.innerHTML = `
+            <div class="widget-info-item">
+              <div class="widget-info-label">Account CD</div>
+              <div class="widget-info-value">Ending in ${cd.account_number}</div>
+            </div>
+            <div class="widget-info-item">
+              <div class="widget-info-label">Interest Rate</div>
+              <div class="widget-info-value" style="color:var(--primary); font-weight:700;">${cd.interest_rate}</div>
+            </div>
+            <div class="widget-info-item">
+              <div class="widget-info-label">Term</div>
+              <div class="widget-info-value">${cd.term}</div>
+            </div>
+            <div class="widget-info-item">
+              <div class="widget-info-label">Principal</div>
+              <div class="widget-info-value">${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cd.principal)}</div>
+            </div>
+            <div class="widget-info-item widget-info-value-full">
+              <div class="widget-info-label">Maturity Date</div>
+              <div class="widget-info-value" style="color:var(--gold);">${cd.maturity_date}</div>
+            </div>
+          `;
+        } else {
+          grid.innerHTML = `<div class="widget-info-item widget-info-value-full">No Certificate of Deposits found.</div>`;
+        }
+        card.appendChild(grid);
+        hasContent = true;
+      }
+
+      else if (name === 'get_account_transaction_history' || data.widget_type === 'transaction_history') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M12 20h9M3 20v-8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8M3 10V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4M12 14v6M12 10v4"/></svg>
+          Recent Transactions
+        `;
+        card.appendChild(title);
+
+        const list = document.createElement('div');
+        list.classList.add('widget-account-list');
+        list.style.maxHeight = '150px';
+        list.style.overflowY = 'auto';
+
+        const txs = data.transactions || [];
+        txs.forEach(tx => {
+          const item = document.createElement('div');
+          item.classList.add('widget-account-item');
+          item.style.marginBottom = '6px';
+
+          const labelSpan = document.createElement('span');
+          labelSpan.classList.add('widget-account-name');
+          labelSpan.style.fontSize = '0.8rem';
+          labelSpan.innerHTML = `${tx.description}<span class="widget-account-num" style="display:block; margin-left:0;">${tx.date}</span>`;
+
+          const valSpan = document.createElement('span');
+          valSpan.classList.add('widget-account-balance');
+          valSpan.style.fontSize = '0.85rem';
+          if (tx.type === 'credit') {
+            valSpan.style.color = '#34c759';
+            valSpan.textContent = '+' + new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount);
+          } else {
+            valSpan.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount);
+          }
+
+          item.appendChild(labelSpan);
+          item.appendChild(valSpan);
+          list.appendChild(item);
+        });
+
+        card.appendChild(list);
+        hasContent = true;
+      }
+
+      else if (name === 'fetch_asset_allocation_details' || data.widget_type === 'asset_allocation') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/></svg>
+          Asset Allocation
+        `;
+        card.appendChild(title);
+
+        const list = document.createElement('div');
+        list.classList.add('widget-account-list');
+
+        const allocation = data.allocation || {};
+        Object.entries(allocation).forEach(([key, val]) => {
+          const item = document.createElement('div');
+          item.classList.add('widget-account-item');
+
+          const labelSpan = document.createElement('span');
+          labelSpan.classList.add('widget-account-name');
+          labelSpan.textContent = key;
+
+          const valSpan = document.createElement('span');
+          valSpan.classList.add('widget-account-balance');
+          valSpan.style.color = 'var(--primary)';
+          valSpan.textContent = val;
+
+          item.appendChild(labelSpan);
+          item.appendChild(valSpan);
+          list.appendChild(item);
+        });
+
+        card.appendChild(list);
+        hasContent = true;
+      }
+
+      else if (name === 'fetch_account_holdings_summary' || data.widget_type === 'holding_summary') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Account Holdings Summary
+        `;
+        card.appendChild(title);
+
+        const list = document.createElement('div');
+        list.classList.add('widget-account-list');
+        list.style.maxHeight = '150px';
+        list.style.overflowY = 'auto';
+
+        const holdings = data.holdings || [];
+        holdings.forEach(hold => {
+          const item = document.createElement('div');
+          item.classList.add('widget-account-item');
+          item.style.marginBottom = '6px';
+
+          const labelSpan = document.createElement('span');
+          labelSpan.classList.add('widget-account-name');
+          labelSpan.style.fontSize = '0.8rem';
+          labelSpan.innerHTML = `${hold.productName || hold.ticker}<span class="widget-account-num" style="display:block; margin-left:0;">${hold.shares} shares</span>`;
+
+          const valSpan = document.createElement('span');
+          valSpan.classList.add('widget-account-balance');
+          valSpan.style.fontSize = '0.85rem';
+          valSpan.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hold.current_value);
+
+          item.appendChild(labelSpan);
+          item.appendChild(valSpan);
+          list.appendChild(item);
+        });
+
+        card.appendChild(list);
+        hasContent = true;
+      }
+
+      else if (name === 'update_cio_summary' || name === 'ask_wealth_insights') {
+        const title = document.createElement('div');
+        title.classList.add('widget-title');
+        title.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          CIO Market Insights
+        `;
+        card.appendChild(title);
+
+        let text = '';
+        if (typeof data === 'string') {
+          text = data;
+        } else if (data && typeof data === 'object') {
+          text = data.result || data.summary || data.raw_content || JSON.stringify(data);
+        }
+
+        const contentDiv = document.createElement('div');
+        contentDiv.style.fontSize = '0.85rem';
+        contentDiv.style.lineHeight = '1.45';
+        contentDiv.style.color = '#fff';
+        contentDiv.textContent = text;
+        card.appendChild(contentDiv);
+        hasContent = true;
+      }
+
+      if (hasContent) {
+        widgetContainer.appendChild(card);
+      }
+    }
+
+    function appendNextChunk() {
+      if (isPrebuffering) {
+        if (queue.length >= MIN_PREBUFFER_CHUNKS) {
+          isPrebuffering = false;
+          console.log('Prebuffering complete. Starting playback with', queue.length, 'chunks.');
+        } else {
+          console.log('Prebuffering: accumulated', queue.length, 'of', MIN_PREBUFFER_CHUNKS, 'chunks.');
+          return;
+        }
+      }
+
+      if (queue.length === 0) {
+        isPrebuffering = true;
+        return;
+      }
+
+      if (isUpdating || !sourceBuffer || sourceBuffer.updating) return;
+      isUpdating = true;
+      const chunk = queue.shift();
+      try {
+        console.log('Appending video chunk to SourceBuffer. Queue length:', queue.length);
+        sourceBuffer.appendBuffer(chunk);
+        if (videoElement.paused) {
+          videoElement.play().catch(err => {
+            console.log('Video play pending user interaction:', err);
+          });
+        }
+      } catch (err) {
+        console.error('Error appending source buffer:', err);
+        addMessage('System', 'MediaSource error: ' + err.message, 'model');
+        isUpdating = false;
+      }
+    }
+
+    function base64ToUint8Array(base64) {
+      let normalized = base64.replace(/-/g, '+').replace(/_/g, '/');
+      while (normalized.length % 4 !== 0) {
+        normalized += '=';
+      }
+      const binaryString = atob(normalized);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function addMessage(sender, text, type) {
+      // Avoid duplicate consecutive system/greeting messages
+      const lastMsg = chatBox.lastElementChild;
+      if (lastMsg && lastMsg.textContent === text) return;
+
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('chat-message', type);
+      msgDiv.textContent = text;
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function sendMessage() {
+      const text = textInput.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      const request = {
+        content: {
+          role: 'user',
+          parts: [{ text: text }]
+        }
+      };
+
+      ws.send(JSON.stringify(request));
+      addMessage('You', text, 'user');
+      currentModelMessageDiv = null;
+      textInput.value = '';
+
+      if (videoElement.paused) {
+        videoElement.play().catch(() => { });
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    micBtn.addEventListener('click', toggleAudioRecording);
+
+    let audioContext = null;
+    let microphone = null;
+    let processor = null;
+    let isRecording = false;
+
+    async function startAudioRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        const inputSampleRate = audioContext.sampleRate;
+        const outputSampleRate = 16000;
+
+        microphone = audioContext.createMediaStreamSource(stream);
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+          const inputBuffer = e.inputBuffer.getChannelData(0);
+          const downsampled = downsampleBuffer(inputBuffer, inputSampleRate, outputSampleRate);
+          const pcm16 = floatTo16BitPCM(downsampled);
+          const base64 = int16ToBase64(pcm16);
+
+          const request = {
+            blob: {
+              mimeType: 'audio/pcm;rate=16000',
+              data: base64
+            }
+          };
+          ws.send(JSON.stringify(request));
+        };
+
+        microphone.connect(processor);
+        processor.connect(audioContext.destination);
+        isRecording = true;
+
+        micBtn.classList.add('recording');
+
+        if (videoElement.paused) {
+          videoElement.play().catch(() => { });
+        }
+      } catch (err) {
+        console.error('Error starting audio recording:', err);
+        addMessage('System', 'Microphone error: ' + err.message, 'model');
+      }
+    }
+
+    function stopAudioRecording() {
+      isRecording = false;
+      if (processor) {
+        processor.disconnect();
+        processor = null;
+      }
+      if (microphone) {
+        microphone.disconnect();
+        microphone = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      micBtn.classList.remove('recording');
+    }
+
+    function toggleAudioRecording() {
+      if (isRecording) {
+        stopAudioRecording();
+      } else {
+        startAudioRecording();
+      }
+    }
+
+    function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
+      if (inputSampleRate === outputSampleRate) {
+        return buffer;
+      }
+      const sampleRateRatio = inputSampleRate / outputSampleRate;
+      const newLength = Math.round(buffer.length / sampleRateRatio);
+      const result = new Float32Array(newLength);
+      let offsetResult = 0;
+      let offsetBuffer = 0;
+      while (offsetResult < result.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+        let accum = 0;
+        let count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+          accum += buffer[i];
+          count++;
+        }
+        result[offsetResult] = accum / count;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+      }
+      return result;
+    }
+
+    function floatTo16BitPCM(input) {
+      const output = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return output;
+    }
+
+    function int16ToBase64(int16Array) {
+      const buffer = int16Array.buffer;
+      const bytes = new Uint8Array(buffer);
+      let len = bytes.byteLength;
+      let binary = '';
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+
+
+
+    // Start connection on load
+    window.addEventListener('load', connect);
+  </script>
+</body>
+
+</html>

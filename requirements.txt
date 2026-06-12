@@ -1,0 +1,1 @@
+google-adk[all]==1.34.3
