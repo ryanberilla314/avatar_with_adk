@@ -591,8 +591,8 @@ limitations under the License.
   <div class="overlay-panel" id="overlayPanel">
     <div class="panel-header">
       <div class="brand-row">
-        <span class="citi-logo">citi</span>
-        <span class="brand-sub">Wealth Live</span>
+        <span class="citi-logo">gemini</span>
+        <span class="brand-sub">Live Avatar</span>
       </div>
       <div class="status-badge">
         <div class="status-dot" id="statusDot"></div>
@@ -602,7 +602,7 @@ limitations under the License.
 
     <div class="welcome-text">
       <h2>Conversational Assistant</h2>
-      <p>Speak naturally or type below to inquire about your portfolio, market insights, and scheduling.</p>
+      <p>Speak naturally or type below to inquire about your customer account and balance.</p>
     </div>
 
     <div class="chat-box" id="chatBox">
@@ -612,13 +612,13 @@ limitations under the License.
 
   <!-- Bottom Floating Input Bar -->
   <div class="input-bar-container">
-    <button class="btn-mic" id="micBtn" title="Speak to Sky">
+    <button class="btn-mic" id="micBtn" title="Speak to Kira">
       <svg viewBox="0 0 24 24">
         <path fill="currentColor"
           d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
       </svg>
     </button>
-    <input type="text" class="text-input" id="textInput" placeholder="Ask Sky anything..." autocomplete="off">
+    <input type="text" class="text-input" id="textInput" placeholder="Ask Kira anything..." autocomplete="off">
     <button class="btn" id="sendBtn">
       <span>Send</span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -636,8 +636,11 @@ limitations under the License.
     const userId = urlParams.get('userId') || 'web_avatar_user';
     const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
 
-    const httpUrl = `http://localhost:8000/apps/${appName}/users/${userId}/sessions`;
-    const websocketUrl = `ws://localhost:8000/run_live?user_id=${userId}&session_id=${sessionId}&app_name=${appName}&save_live_blob=true`;
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    const httpUrl = `${protocol}//${host}/apps/${appName}/users/${userId}/sessions`;
+    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+    const websocketUrl = `${wsProtocol}//${host}/run_live?user_id=${userId}&session_id=${sessionId}&app_name=${appName}&save_live_blob=true`;
 
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
@@ -714,7 +717,7 @@ limitations under the License.
         statusDot.classList.add('connected');
         statusText.textContent = 'Connected';
         placeholder.classList.add('hidden');
-        addMessage('System', 'Connected securely to Sky.', 'model');
+        addMessage('System', 'Connected securely to Kira.', 'model');
       };
 
       ws.onclose = () => {
@@ -779,7 +782,7 @@ limitations under the License.
                   if (currentModelMessageDiv) {
                     currentModelMessageDiv.textContent = part.text;
                   } else {
-                    addMessage('Sky', part.text, 'model');
+                    addMessage('Kira', part.text, 'model');
                   }
                 }
               }
